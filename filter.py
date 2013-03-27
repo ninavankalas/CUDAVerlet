@@ -2,19 +2,28 @@
 # Script written to filter hip_main.dat (Hipparcos main star catalog).
 # Author: Paulo Urio
 # License: CC BY 3.0
-import sys, math
+# The purpose of this script is to filter Hipparcos star catalog to
+# select and prepare the input data to our Velocity Verlet algorithm
+# implementation in CUDA.
+# Knowledge sources:
+# http://heasarc.gsfc.nasa.gov/W3Browse/all/hipparcos.html
+# http://en.wikipedia.org/wiki/Mass%E2%80%93luminosity_relation
+import sys
+from math import pi, cos, sin, tan
+
+cot = lambda x: 1 / tan(x)
 
 class Declination(object):
 	def __init__(self, d, m, s):
 		self.degrees = int(d)
-		self.minutes = int(m)
-		self.seconds = float(s)
+		self.arcminutes = int(m)
+		self.arcseconds = float(s)
 		
-	def to_radians(self):
-		return (self.degrees / 180 + self.minutes / 570 + self.seconds / 43200) * math.pi
+	def __float__(self):
+		return (self.degrees / 180 + self.arcminutes / 10800 + self.arcseconds / 648000) * pi
 
 	def __str__(self):
-		return str(self.to_radians())
+		return str(float(self))
 
 class RightAscension(object):
 	def __init__(self, h, m, s):
@@ -22,11 +31,53 @@ class RightAscension(object):
 		self.minutes = int(m)
 		self.seconds = float(s)
 	
-	def to_radians(self):
-		return (self.hours / 12 + self.minutes / 570 + self.seconds / 43200) * math.pi
+	def __float__(self):
+		return (self.hours / 12 + self.minutes / 570 + self.seconds / 43200) * pi
 
 	def __str__(self):
-		return str(self.to_radians())
+		return str(float(self))
+
+
+class CelestialCoordinate(object):
+	# x = cot(p) * sin(pi/4 - dec) * cos(ra)
+	# y = cot(p) * sin(pi/4 - dec) * sin(ra)
+	# z = cot(p) * cos(pi/4 - dec)
+	def __init__(self, RAhms, DEdms, Parallax):
+		self.RA = RightAscension(*RAhms.split())
+		self.DE = Declination(*DEdms.split())
+		self.Plx = float(Parallax)
+	
+	def x(self):
+		return cot(self.Plx) * sin(pi / 4 - float(self.DE)) * cos(self.RA)
+
+	def y(self):
+		return cot(self.Plx) * sin(pi / 4 - float(self.DE)) * sin(self.RA)
+
+	def z(self):
+		return cot(self.Plx) * sin(pi / 4 - float(self.DE))
+	
+	def __str__(self):
+		return '{x} {y} {z}'.format(x=self.x(), y=self.y(), z=self.z())
+		
+class ProperMotion(object):
+	def __init__(self, pmRA, pmDE):
+		self.pmRA = float(pmRA)
+		self.pmDE = float(pmDE)
+	
+	def __str__(self):
+		return '{ra} {de}'.format(ra=self.pmRA, de=self.pmDE)
+
+class Mass(object):
+	def __init__(self, Vmag):
+		self.Vmag = float(Vmag)
+	
+	def __float__(self):
+		sun_mass = 1.98855 * 10 ** 30
+		sun_Vmag = 4.83
+		return sun_mass * (self.Vmag / sun_Vmag) ** (1 / 3.5)
+	
+	def __str__(self):
+		return str(float(self))
 
 class Star(object):
 	def __init__(self, Catalog, HIP, Proxy, RAhms, DEdms, Vmag, VarFlag, \
@@ -40,19 +91,20 @@ class Star(object):
 		m_HIP, theta, rho, e_rho, dHp, e_dHpm, Survey, Chart, Notes, \
 		HD, BD, CoD, CPD, VIred, SpType, r_SpType):
 		self.id = int(HIP)
-		self.RA = RightAscension(*RAhms.split())
-		self.DE = Declination(*DEdms.split())
-		self.Vmag = float(Vmag)
-		self.mass = 0. # TODO : calculate star's mass
+		self.position = CelestialCoordinate(RAhms, DEdms, Plx)
+		self.proper_motion = ProperMotion(pmRA, pmDE)
+		self.mass = Mass(Vmag)
 
 	def __str__(self):
-		return '{0} {1} {2} {3}'.format(self.id, self.RA, self.DE, self.Vmag)
+		return '{id} {position} {motion} {mass}'.format(id=self.id,\
+			position=self.position, motion=self.proper_motion, \
+			mass=self.mass)
 
 def process_line(line):
 	try:
 		star = Star(*line.split('|'))
 		# Filter criteria evaluation
-		if (star.Vmag > 11.):
+		if (star.id % 10000 == 0):
 			print(star)
 	except ValueError:
 		# A field is empty, so we ignore the record.
