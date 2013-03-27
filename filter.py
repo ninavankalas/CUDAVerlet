@@ -2,25 +2,31 @@
 # Script written to filter hip_main.dat (Hipparcos main star catalog).
 # Author: Paulo Urio
 # License: CC BY 3.0
-import sys
+import sys, math
 
 class Declination(object):
 	def __init__(self, d, m, s):
 		self.degrees = int(d)
 		self.minutes = int(m)
 		self.seconds = float(s)
+		
+	def to_radians(self):
+		return (self.degrees / 180 + self.minutes / 570 + self.seconds / 43200) * math.pi
 
 	def __str__(self):
-		return '{0} {1} {2}'.format(self.degrees, self.minutes, self.seconds)
+		return str(self.to_radians())
 
 class RightAscension(object):
 	def __init__(self, h, m, s):
 		self.hours = int(h)
 		self.minutes = int(m)
 		self.seconds = float(s)
+	
+	def to_radians(self):
+		return (self.hours / 12 + self.minutes / 570 + self.seconds / 43200) * math.pi
 
 	def __str__(self):
-		return '{0} {1} {2}'.format(self.hours, self.minutes, self.seconds)
+		return str(self.to_radians())
 
 class Star(object):
 	def __init__(self, Catalog, HIP, Proxy, RAhms, DEdms, Vmag, VarFlag, \
