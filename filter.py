@@ -10,8 +10,7 @@
 # http://en.wikipedia.org/wiki/Mass%E2%80%93luminosity_relation
 import sys
 from math import pi, cos, sin, tan, sqrt, log10
-
-PARSEC = 3.0856775814671900 * 10 ** 16
+from scipy import constants
 
 class Sun:
 	MASS = 1.98855e30 # kg
@@ -22,7 +21,7 @@ class Sun:
 	TEMPERATURE = 5778 # Kelvin
 	(X, Y, Z) = (0, 0, 0) # parsec
 
-cot = lambda x: 1 / tan(x)
+cot = lambda x: 1  / tan(x)
 
 class Radius(object):
 	# http://www.uni.edu/morgans/astro/course/Notes/section2/spectraltemps.html
@@ -56,6 +55,10 @@ class Radius(object):
 				best_match = mag
 				best_approx = approx
 		return self.TABLE[best_match]
+	
+	def schwarzschild_radius(self):
+		# Proportionality constant = 2 * constants.G / constants.c ** 2
+		return 1.4851296900185762e-27 * self.star.vmag.mass()
 
 	def __truediv__(self, b):
 		return float(self) / b
@@ -104,27 +107,27 @@ class CelestialCoordinate(object):
 	def __init__(self, RAhms, DEdms, Parallax):
 		self.RA = RightAscension(*RAhms.split())
 		self.DE = Declination(*DEdms.split())
-		self.Plx = float(Parallax)
+		self.Plx = float(Parallax) / 1000 # mas -> arcsec
 	
 	def x(self):
-		return cot(self.Plx) * cos(self.DE) * cos(self.RA)
+		return self.distance() * cos(self.DE) * cos(self.RA)
 
 	def y(self):
-		return cot(self.Plx) * cos(self.DE) * sin(self.RA)
+		return self.distance() * cos(self.DE) * sin(self.RA)
 
 	def z(self):
-		return cot(self.Plx) * sin(self.DE)
+		return self.distance() * sin(self.DE)
 	
 	def distance(self):
-		return sqrt(self.x() ** 2 + self.y() ** 2 + self.z() ** 2)
+		return abs(1 / self.Plx)
 		
 	def __str__(self):
 		return '{x} {y} {z}'.format(x=self.x(), y=self.y(), z=self.z())
 		
 class ProperMotion(object):
 	def __init__(self, pmRA, pmDE):
-		self.pmRA = float(pmRA)
-		self.pmDE = float(pmDE)
+		self.pmRA = float(pmRA) / 1000.0
+		self.pmDE = float(pmDE) / 1000.0
 	
 	def __str__(self):
 		return '{RA} {DE}'.format(RA=self.pmRA, DE=self.pmDE)
@@ -184,38 +187,47 @@ class Star(object):
 					'Computed data\n' 
 					'\tRA = {RA} radians\n' 
 					'\tDE = {DE} radians\n'
+					'\tParallax = {Plx} arcsec\n'
 					'\tX = {X} parsecs\n'
 					'\tY = {Y} parsecs\n'
 					'\tZ = {Z} parsecs\n'
+					'\tProper motion RA = {pmRA} arcsec/yr\n' 
+					'\tProper motion DE = {pmDE} arcsec/yr\n'
 					'\tDistance = {distance} parsecs\n'
 					'\tLuminosity = {luminosity} L☉\n'
 					'\tMass = {mass} M☉\n'
 					'\tTemperature = {temperature} K☉\n'
-					'\tRadius = {radius} R☉') % locals()).format(
+					'\tRadius = {radius} R☉\n'
+					'\tSchwarzschild radius = {gravradius} m² / kg') 
+						% locals()).format(
 						RA=self.coord.RA,
 						DE=self.coord.DE,
+						Plx=self.coord.Plx,
 						X=self.coord.x(),
 						Y=self.coord.y(),
 						Z=self.coord.z(),
+						pmRA=self.proper_motion.pmRA,
+						pmDE=self.proper_motion.pmDE,
 						distance=self.coord.distance(),
 						luminosity=self.vmag.luminosity() / Sun.LUMINOSITY,
 						mass=float(self.vmag.mass()) / Sun.MASS,
 						temperature=self.radius.get_temperature() / Sun.TEMPERATURE,
-						radius=self.radius / Sun.RADIUS)
-
+						radius=self.radius / Sun.RADIUS,
+						gravradius=self.radius.schwarzschild_radius())
 
 	def __str__(self):
 		return '{id} {position} {motion} {mass}'.format(id=self.id, \
-			position=self.coord, motion=self.proper_motion, \
-			mass=self.vmag.mass())
+			position=self.coord, 
+			motion=self.proper_motion, \
+			mass=self.vmag.mass() / Sun.MASS)
 
 def process_line(line):
 	try:
 		star = Star(*line.split('|'))
 		# Filter criteria evaluation
-		if star.id < 5:
+		if star.coord.distance() < 5.:
 			print(star.info)
-			print('Output line')
+			#print('Output line')
 			print(star)
 	except ZeroDivisionError:
 		# Probably a star with parallax = 0.0
