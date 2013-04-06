@@ -9,52 +9,38 @@
 # http://heasarc.gsfc.nasa.gov/W3Browse/all/hipparcos.html
 # http://en.wikipedia.org/wiki/Mass%E2%80%93luminosity_relation
 import sys
+import struct
 from math import pi, cos, sin, tan, sqrt, log10
 from scipy import constants
 
+HUBBLE_CONSTANT = 70.4e6 # (km/s) / parsec
+
 class Sun:
-	MASS = 1.98855e30 # kg
+	MASS = 1.98855e30
 	LUMINOSITY = 1.9e-16 # W
 	DISTANCE = 4.848e-6 # parsec
 	VMAG = -26.74 # mag
-	RADIUS = 6.955 * 10 ** 8 # meters
-	TEMPERATURE = 5778 # Kelvin
+	RADIUS = 6.955e8 # meters
+	SCHWARSZCHILD_RADIUS = 2.9532546450864397e3 # km
 	(X, Y, Z) = (0, 0, 0) # parsec
+	
+	def __str__(self):
+		return ('\tMass: {} kg\n'
+				'\tLuminosity: {} W\n'
+				'\tDistance: {} parsec\n'
+				'\tVisual Magnitude: {} mag\n'
+				'\tRadius: {} meter\n'
+				'\tSchwarzschild radius: {} meter\n'
+				'\t(X, Y, Z): ({}, {}, {}) parsec').format(
+						self.MASS, self.LUMINOSITY,	self.DISTANCE, self.VMAG,
+						self.RADIUS, self.SCHWARSZCHILD_RADIUS,
+						self.X, self.Y, self.Z)
 
 cot = lambda x: 1  / tan(x)
 
 class Radius(object):
-	# http://www.uni.edu/morgans/astro/course/Notes/section2/spectraltemps.html
-	# Absolute Magnitude (mag): Temperature (K)
-	TABLE = { -4.5: 54000, -4.0: 45000, -3.9: 43300, -3.8: 40600,
-			-3.6: 37800, -3.3: 29200, -2.3: 23000, -1.9: 21000,
-			-1.1: 17600, -.4: 15200, .0: 14300, .3: 13500, .7: 12300,
-			+1.1: 11400, 1.5: 9600, 1.7: 9330, 1.8: 9040, 2.: 8750,
-			2.1: 8480, 2.2: 8310, 2.4: 7920, 3.: 7350, 3.3: 7050,
-			3.5: 6850, 3.7: 6700, 4.: 6550, 4.3: 6400, 4.4: 6300,
-			4.7: 6050, 4.9: 5930, 5.: 5800, 5.2: 5660, 5.6: 5440,
-			6.: 5240, 6.2: 5110, 6.4: 4960, 6.7: 4800, 7.1: 4600,
-			7.4: 4400, 8.1: 4000, 8.7: 3750, 9.4: 3700, 10.1: 3600,
-			10.7: 3500, 11.2: 3400, 12.3: 3200, 13.4: 3100, 13.9: 2900,
-			14.4: 2700}
-	
 	def __init__(self, star):
 		self.star = star
-		self.get_temperature()
-			
-	def _apparent_magnitude(self, absolute_magnitude, distance):
-		return absolute_magnitude - 5 * (1 - log10(distance))
-	
-	def get_temperature(self):
-		best_match = None
-		best_approx = None
-		for mag in self.TABLE:
-			vmag = self._apparent_magnitude(mag, self.star.coord.distance())
-			approx = abs(vmag - self.star.vmag)
-			if not best_match or approx < best_approx:
-				best_match = mag
-				best_approx = approx
-		return self.TABLE[best_match]
 	
 	def schwarzschild_radius(self):
 		# Proportionality constant = 2 * constants.G / constants.c ** 2
@@ -64,10 +50,7 @@ class Radius(object):
 		return float(self) / b
 
 	def __float__(self):
-		# http://en.wikipedia.org/wiki/Stefan%E2%80%93Boltzmann_law
-		temperature = (Sun.TEMPERATURE / self.get_temperature()) ** 2
-		luminosity = sqrt(self.star.vmag.luminosity() / Sun.LUMINOSITY)
-		return Sun.RADIUS * temperature * luminosity
+		return (self.star.vmag.mass() / Sun.MASS) ** 0.9
 
 class Declination(object):
 	def __init__(self, d, m, s):
@@ -99,6 +82,10 @@ class RightAscension(object):
 	def __str__(self):
 		return str(float(self))
 
+class InvalidParallax(Exception):
+	# useful exception when parallax is equal to zero.  Trying to use it
+	# would generate division by zero.
+	pass
 
 class CelestialCoordinate(object):
 	# x = cot(p) * cos(dec) * cos(ra)
@@ -108,6 +95,8 @@ class CelestialCoordinate(object):
 		self.RA = RightAscension(*RAhms.split())
 		self.DE = Declination(*DEdms.split())
 		self.Plx = float(Parallax) / 1000 # mas -> arcsec
+		if self.Plx == .0:
+			raise InvalidParallax()
 	
 	def x(self):
 		return self.distance() * cos(self.DE) * cos(self.RA)
@@ -125,12 +114,37 @@ class CelestialCoordinate(object):
 		return '{x} {y} {z}'.format(x=self.x(), y=self.y(), z=self.z())
 		
 class ProperMotion(object):
-	def __init__(self, pmRA, pmDE):
-		self.pmRA = float(pmRA) / 1000.0
-		self.pmDE = float(pmDE) / 1000.0
+	def __init__(self, pmRA, pmDE, star):
+		self.pmRA = self.arcserc_to_radian(float(pmRA) / 1000.0)
+		self.pmDE = self.arcserc_to_radian(float(pmDE) / 1000.0)
+		self.star = star
+
+	def arcserc_to_radian(self, arcsec):
+		return arcsec * 4.848136811097625e-6
+		
+	def set_radialvelocity(self, rdV):
+		self.rdV = rdV # km/s
+		
+	def radialvelocity_pcyr(self):
+		# Radial Velocity in parsec/yr
+		return self.rdV * 1.0227121651072225e-06
+		
+	def radialvelocity_pc(self):
+		# Radial Velocity in parsec
+		# https://www.cfa.harvard.edu/~dfabricant/huchra/seminar/lsc/
+		return self.rdV / HUBBLE_CONSTANT
+		
+	def dx(self):
+		return self.radialvelocity_pc() * cos(self.pmDE) * cos(self.pmRA)
+
+	def dy(self):
+		return self.radialvelocity_pc() * cos(self.pmDE) * sin(self.pmRA)
+
+	def dz(self):
+		return self.radialvelocity_pc() * sin(self.pmDE)
 	
 	def __str__(self):
-		return '{RA} {DE}'.format(RA=self.pmRA, DE=self.pmDE)
+		return '{dx} {dy} {dz}'.format(dx=self.dx(), dy=self.dy(), dz=self.dz())
 
 class VMagnitude(object):
 	def __init__(self, Vmag, star):
@@ -174,46 +188,64 @@ class Star(object):
 		HD, BD, CoD, CPD, VIred, SpType, r_SpType):
 		self.id = int(HIP)
 		self.coord = CelestialCoordinate(RAhms, DEdms, Plx)
-		self.proper_motion = ProperMotion(pmRA, pmDE)
+		self.proper_motion = ProperMotion(pmRA, pmDE, self)
 		self.vmag = VMagnitude(Vmag, self)
 		self.radius = Radius(self)
-		self.info = (('\nID = %(HIP)s\nRaw input\n'
+		self.info = ('\nID = %(HIP)s\nRaw input\n'
 				    '\tRAhms = %(RAhms)s\n'
 					'\tDEdms = %(DEdms)s\n'
 					'\tVmag = %(Vmag)s mag\n'
 					'\tPlx = %(Plx)s mas\n'
 					'\tpmRA = %(pmRA)s mas/yr\n'
-					'\tpmDE = %(pmDE)s mas/yr\n'
-					'Computed data\n' 
-					'\tRA = {RA} radians\n' 
-					'\tDE = {DE} radians\n'
-					'\tParallax = {Plx} arcsec\n'
-					'\tX = {X} parsecs\n'
-					'\tY = {Y} parsecs\n'
-					'\tZ = {Z} parsecs\n'
-					'\tProper motion RA = {pmRA} arcsec/yr\n' 
-					'\tProper motion DE = {pmDE} arcsec/yr\n'
-					'\tDistance = {distance} parsecs\n'
-					'\tLuminosity = {luminosity} L☉\n'
-					'\tMass = {mass} M☉\n'
-					'\tTemperature = {temperature} K☉\n'
-					'\tRadius = {radius} R☉\n'
-					'\tSchwarzschild radius = {gravradius} m² / kg') 
-						% locals()).format(
-						RA=self.coord.RA,
-						DE=self.coord.DE,
-						Plx=self.coord.Plx,
-						X=self.coord.x(),
-						Y=self.coord.y(),
-						Z=self.coord.z(),
-						pmRA=self.proper_motion.pmRA,
-						pmDE=self.proper_motion.pmDE,
-						distance=self.coord.distance(),
-						luminosity=self.vmag.luminosity() / Sun.LUMINOSITY,
-						mass=float(self.vmag.mass()) / Sun.MASS,
-						temperature=self.radius.get_temperature() / Sun.TEMPERATURE,
-						radius=self.radius / Sun.RADIUS,
-						gravradius=self.radius.schwarzschild_radius())
+					'\tpmDE = %(pmDE)s mas/yr\n' % locals())
+		
+	def has_enoughdata(self):
+		return hasattr(self.proper_motion, 'rdV')
+	
+	def get_computed_data(self):
+		if hasattr(self.proper_motion, 'rdV'):
+			rdV = self.proper_motion.rdV
+			rdVpcyr = self.proper_motion.radialvelocity_pcyr()
+		else:
+			rdV, rdVpcyr = '?', '?'
+		return self.info + ('Star\n' 
+				'\tHIP = {HIP}\n' 
+				'\tRA = {RA} radian\n' 
+				'\tDE = {DE} radian\n'
+				'\tParallax = {Plx} arcsec\n'
+				'\tX = {X} parsec\n'
+				'\tY = {Y} parsec\n'
+				'\tZ = {Z} parsec\n'
+				'\tDistance = {distance} parsec\n'
+				'\tProper motion RA = {pmRA} radian/yr\n' 
+				'\tProper motion DE = {pmDE} radian/yr\n'
+				'\tRadial velocity = {radial} km/s ({rdVpcyr} parsec/yr)\n'
+				'\tDelta X = {dx} parsec/yr\n'
+				'\tDelta Y = {dy} parsec/yr\n'
+				'\tDelta Z = {dz} parsec/yr\n'
+				'\tLuminosity = {luminosity} L☉\n'
+				'\tRadius = {radius} R☉\n'
+				'\tSchwarszchild radius = {sradius} Rs☉\n'
+				'\tMass = {mass} M☉\n').format(
+				HIP=self.id,
+				RA=self.coord.RA,
+				DE=self.coord.DE,
+				Plx=self.coord.Plx,
+				X=self.coord.x(),
+				Y=self.coord.y(),
+				Z=self.coord.z(),
+				dx=self.proper_motion.dx(),
+				dy=self.proper_motion.dy(),
+				dz=self.proper_motion.dz(),
+				pmRA=self.proper_motion.pmRA,
+				pmDE=self.proper_motion.pmDE,
+				radial=rdV,
+				rdVpcyr=rdVpcyr,
+				distance=self.coord.distance(),
+				radius=float(self.radius),
+				sradius=self.radius.schwarzschild_radius() / Sun.SCHWARSZCHILD_RADIUS,
+				luminosity=self.vmag.luminosity() / Sun.LUMINOSITY,
+				mass=float(self.vmag.mass()) / Sun.MASS)
 
 	def __str__(self):
 		return '{id} {position} {motion} {mass}'.format(id=self.id, \
@@ -224,13 +256,8 @@ class Star(object):
 def process_line(line):
 	try:
 		star = Star(*line.split('|'))
-		# Filter criteria evaluation
-		if star.coord.distance() < 5.:
-			print(star.info)
-			#print('Output line')
-			print(star)
-	except ZeroDivisionError:
-		# Probably a star with parallax = 0.0
+		return star
+	except InvalidParallax:
 		pass
 	except ValueError:
 		# A field is empty, so we ignore the record.
@@ -238,11 +265,43 @@ def process_line(line):
 	except TypeError:
 		print('Error: invalid input format.')
 		exit(1)
-	except KeyboardInterrupt:
-		exit(0)
+
+# Merge pulkovo data to the current star instance.
+def merge_pulkovo(stars, HIP, HD, rdV, ie_rdV, srcs, ee_rdV, RA, DE, mV):
+	# http://www.geocities.ws/orionspiral/
+	hip = int(HIP)
+	if hip in stars:
+		stars[hip].proper_motion.set_radialvelocity(float(rdV))
+
+# Read Pulkovo Radial Velocity data		
+def read_pulkovo(stars):
+	input_data = open('pcrv.txt', 'r').readlines()
+	for line in input_data:
+		bline = line.encode()
+		merge_pulkovo(stars, *struct.unpack('6s7s7s4s2s6s6s7s5sx', bline))
+	return stars
+
+def read_hipparcos():
+	stars = dict() 
+	input_data = open('hip_main.dat', 'r').readlines()
+	for line in input_data:
+		s = process_line(line)
+		if s:
+			stars[s.id] = s
+	return stars
 
 if __name__ == '__main__':
-	input_data = sys.stdin.readlines()
-	for line in input_data:
-		process_line(line)
-
+	print('Sun information:\n', Sun())
+	try:
+		stars = read_hipparcos()
+		read_pulkovo(stars)
+		for s in stars.values():
+			if s.has_enoughdata():
+				print(s.get_computed_data())
+				print(s)
+	except KeyboardInterrupt:
+		exit(0)
+	except FileNotFoundError:
+		print('One of the input files were not found.')
+		exit(1)
+	
