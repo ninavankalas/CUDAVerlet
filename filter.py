@@ -17,12 +17,12 @@ HUBBLE_CONSTANT = 70.4e6 # (km/s) / parsec
 
 class Sun:
 	MASS = 1.98855e30
-	LUMINOSITY = 1.9e-16 # W
-	DISTANCE = 4.848e-6 # parsec
-	VMAG = -26.74 # mag
-	RADIUS = 6.955e8 # meters
-	SCHWARSZCHILD_RADIUS = 2.9532546450864397e3 # km
-	(X, Y, Z) = (0, 0, 0) # parsec
+	LUMINOSITY = 1.9e-16
+	DISTANCE = 4.848e-6
+	VMAG = -26.74
+	RADIUS = 6.955e8
+	SCHWARSZCHILD_RADIUS = 2.9532546450864397e3
+	(X, Y, Z) = (0, 0, 0)
 	
 	def __str__(self):
 		return ('\tMass: {} kg\n'
@@ -31,10 +31,9 @@ class Sun:
 				'\tVisual Magnitude: {} mag\n'
 				'\tRadius: {} meter\n'
 				'\tSchwarzschild radius: {} meter\n'
-				'\t(X, Y, Z): ({}, {}, {}) parsec').format(
-						self.MASS, self.LUMINOSITY,	self.DISTANCE, self.VMAG,
-						self.RADIUS, self.SCHWARSZCHILD_RADIUS,
-						self.X, self.Y, self.Z)
+				'\t(X, Y, Z): ({}, {}, {}) parsec').format(self.MASS, 
+						self.LUMINOSITY, self.DISTANCE, self.VMAG, self.RADIUS, 
+						self.SCHWARSZCHILD_RADIUS,	self.X, self.Y, self.Z)
 
 cot = lambda x: 1  / tan(x)
 
@@ -82,7 +81,7 @@ class RightAscension(object):
 	def __str__(self):
 		return str(float(self))
 
-class InvalidParallax(Exception):
+class InvalidParallaxError(Exception):
 	# useful exception when parallax is equal to zero.  Trying to use it
 	# would generate division by zero.
 	pass
@@ -96,7 +95,7 @@ class CelestialCoordinate(object):
 		self.DE = Declination(*DEdms.split())
 		self.Plx = float(Parallax) / 1000 # mas -> arcsec
 		if self.Plx == .0:
-			raise InvalidParallax()
+			raise InvalidParallaxError()
 	
 	def x(self):
 		return self.distance() * cos(self.DE) * cos(self.RA)
@@ -158,8 +157,7 @@ class VMagnitude(object):
 		return (Sun.LUMINOSITY * mag) / d
 		
 	def radius(self):
-		# http://physics.ucsd.edu/students/courses/winter2008/managed/physics223/documents/Lecture7%13Part3.pdf
-		return float(self) ** (.9)
+		return float(self) ** .9
 	
 	def mass(self):
 		a = 3.5
@@ -176,15 +174,15 @@ class VMagnitude(object):
 		raise str(self.Vmag)
 
 class Star(object):
-	def __init__(self, Catalog, HIP, Proxy, RAhms, DEdms, Vmag, VarFlag, \
-		r_Vmag, RAdeg, DEdeg, AstroRef, Plx, pmRA, pmDE, e_RAdeg, \
-		e_DEdeg, e_Plx, e_pmRA, e_pmDE, DEDA, PlxRA, PlxDE, pmRARA, \
-		pmRADE, pmRAPlx, pmDERA, pmDEDE, pmDEPlx, pmDEpmRA, F1, F2, \
-		HIP2, BTmag, e_BTmag, VTmag, e_VTmag, m_BTmag, BV, e_BV, \
-		r_BV, VI, e_VI, r_VI, CombMag, Hpmag, e_Hpmag, Hpscat, \
-		o_Hpmag, m_Hpmag, Hpmax, HPmin, Period, HvarType, moreVar, \
-		morePhoto, CCDM, n_CCDM, Nsys, Ncomp, MultFlag, Source, Qual, \
-		m_HIP, theta, rho, e_rho, dHp, e_dHpm, Survey, Chart, Notes, \
+	def __init__(self, Catalog, HIP, Proxy, RAhms, DEdms, Vmag, VarFlag,
+		r_Vmag, RAdeg, DEdeg, AstroRef, Plx, pmRA, pmDE, e_RAdeg,
+		e_DEdeg, e_Plx, e_pmRA, e_pmDE, DEDA, PlxRA, PlxDE, pmRARA,
+		pmRADE, pmRAPlx, pmDERA, pmDEDE, pmDEPlx, pmDEpmRA, F1, F2,
+		HIP2, BTmag, e_BTmag, VTmag, e_VTmag, m_BTmag, BV, e_BV,
+		r_BV, VI, e_VI, r_VI, CombMag, Hpmag, e_Hpmag, Hpscat,
+		o_Hpmag, m_Hpmag, Hpmax, HPmin, Period, HvarType, moreVar,
+		morePhoto, CCDM, n_CCDM, Nsys, Ncomp, MultFlag, Source, Qual,
+		m_HIP, theta, rho, e_rho, dHp, e_dHpm, Survey, Chart, Notes,
 		HD, BD, CoD, CPD, VIred, SpType, r_SpType):
 		self.id = int(HIP)
 		self.coord = CelestialCoordinate(RAhms, DEdms, Plx)
@@ -248,16 +246,15 @@ class Star(object):
 				mass=float(self.vmag.mass()) / Sun.MASS)
 
 	def __str__(self):
-		return '{id} {position} {motion} {mass}'.format(id=self.id, \
-			position=self.coord, 
-			motion=self.proper_motion, \
+		return '{id} {position} {motion} {mass}'.format(id=self.id,
+			position=self.coord, motion=self.proper_motion,
 			mass=self.vmag.mass() / Sun.MASS)
 
 def process_line(line):
 	try:
 		star = Star(*line.split('|'))
 		return star
-	except InvalidParallax:
+	except InvalidParallaxError:
 		pass
 	except ValueError:
 		# A field is empty, so we ignore the record.
@@ -285,9 +282,9 @@ def read_hipparcos():
 	stars = dict() 
 	input_data = open('hip_main.dat', 'r').readlines()
 	for line in input_data:
-		s = process_line(line)
-		if s:
-			stars[s.id] = s
+		star = process_line(line)
+		if star:
+			stars[star.id] = star
 	return stars
 
 if __name__ == '__main__':
