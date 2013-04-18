@@ -1,8 +1,8 @@
 hip_main.dat
 
-
 # Object files
 *.o
+*.out
 
 # Libraries
 *.lib
