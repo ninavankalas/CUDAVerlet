@@ -155,7 +155,7 @@ __global__ void move_stars(Params p, const double3 *acc, double3 *dpos)
 #undef hdt
 #undef dt
 
-#define BLOCK_THREADS 16
+#define BLOCK_THREADS 512
 __host__ void simulate(Params hostParam, cudaDeviceProp& prop)
 {
 	size_t vec_size = hostParam.count * sizeof(double3);
@@ -249,11 +249,10 @@ int main(void)
 			exit(EXIT_FAILURE);
 		}
 	}
-	print_stars(p);
-
+	
 	simulate(p, prop);
 
-	print_stars(p);
+	//print_stars(p);
 
 	delete[] p.hip;
 	delete[] p.pos;
