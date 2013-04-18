@@ -20,7 +20,7 @@ struct Params {
 };
 
 template<unsigned int blockSize>
-__global__ void compute_accelerations(Params p, double3 *acc)
+__global__ void compute_accelerations(Params p, double3 * __restrict acc)
 {
 	extern __shared__ double3 s_sum[];
 
@@ -131,7 +131,8 @@ __global__ void compute_accelerations(Params p, double3 *acc)
 #define hdt (dt / 2.)
 #define sdt (dt * hdt)
 template<unsigned int blockSize>
-__global__ void move_stars(Params p, const double3 *acc, double3 *dpos)
+__global__ void move_stars(Params p, const double3 * __restrict acc,
+		double3 * __restrict dpos)
 {
 	uint32_t i = blockIdx.x * blockSize + threadIdx.x;
 
