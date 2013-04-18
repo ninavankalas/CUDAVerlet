@@ -1,5 +1,6 @@
 hip_main.dat
 
+
 # Object files
 *.o
 
@@ -17,3 +18,22 @@ hip_main.dat
 *.exe
 *.out
 *.app
+
+*.pydevproject
+.project
+.metadata
+bin/**
+tmp/**
+tmp/**/*
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.classpath
+.settings/
+.loadpath
+
+.cproject
+.buildpath
+
