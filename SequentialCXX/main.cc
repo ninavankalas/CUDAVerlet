@@ -28,10 +28,6 @@ struct double3 {
 
 	~double3() {}
 
-	friend std::istream& operator >>(std::istream& stream, double3& s) {
-		return stream >> s.x >> s.y >> s.z;
-	}
-
 	inline
 	double3& operator =(const double3& b) {
 		x = b.x;
@@ -86,10 +82,6 @@ public:
 	double3 acceleration = double3(0, 0, 0);
 	double3 prev_delta = double3(0, 0, 0);
 	double mass = 0;
-
-	friend std::istream& operator >>(std::istream& stream, Star& s) {
-		return stream >> s.hip >> s.pos >> s.vel >> s.mass;
-	}
 
 	inline
 	void update_acceleration(const std::vector<Star>& __restrict stars) {
