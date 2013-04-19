@@ -7,7 +7,7 @@
 #define THREADS 8
 #endif
 
-#define ITERATIONS 1
+#define ITERATIONS 10
 #define YEARS_PER_STEP 1000
 
 #define Epsilon2 7.3890560989306495

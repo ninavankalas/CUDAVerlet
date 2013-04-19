@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in {2..8}
+for i in {8..1}
 do
 	CFLAGS="-Wall -Wextra -std=c++11 -O3 -ffast-math -DNDEBUG -DTHREADS=${i} -fopenmp"
 	LDFLAGS="-lm -fopenmp"

@@ -45,11 +45,14 @@ __global__ void compute_accelerations(Params p, double3 * __restrict acc)
 		r.z = b->z - a->z;
 		double dist = r.x * r.x + r.y * r.y + r.z * r.z + Epsilon2;
 		double s = p.mass[j] / (dist * sqrt(dist));
-		s_sum[tid].x += r.x * s * GRAV_CONST;
-		s_sum[tid].y += r.y * s * GRAV_CONST;
-		s_sum[tid].z += r.z * s * GRAV_CONST;
+		s_sum[tid].x += r.x * s;
+		s_sum[tid].y += r.y * s;
+		s_sum[tid].z += r.z * s;
 	}
 
+	s_sum[tid].x *= GRAV_CONST;
+	s_sum[tid].y *= GRAV_CONST;
+	s_sum[tid].z *= GRAV_CONST;
 	__syncthreads();
 
 	// Reduction
